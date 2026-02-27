@@ -164,7 +164,7 @@ export default function POS() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-emerald-600">₹{item.selling_rate}</p>
+                      <p className="font-bold text-emerald-600">Rs.{item.selling_rate}</p>
                       <p className="text-xs text-neutral-400">{item.current_qty} in stock</p>
                     </div>
                   </button>
@@ -207,8 +207,8 @@ export default function POS() {
                     >+</button>
                   </div>
                   <div className="text-right w-24">
-                    <p className="font-bold text-neutral-900">₹{(item.unit_price * item.quantity).toFixed(2)}</p>
-                    <p className="text-[10px] text-neutral-400">₹{item.unit_price} / unit</p>
+                    <p className="font-bold text-neutral-900">Rs.{(item.unit_price * item.quantity).toFixed(2)}</p>
+                    <p className="text-[10px] text-neutral-400">Rs.{item.unit_price} / unit</p>
                   </div>
                   <button 
                     onClick={() => removeFromCart(item.batch_id)}
@@ -289,14 +289,14 @@ export default function POS() {
           <div className="pt-6 border-t border-neutral-100 space-y-3">
             <div className="flex justify-between text-neutral-500">
               <span>Subtotal</span>
-              <span>₹{totals.subtotal.toFixed(2)}</span>
+              <span>Rs.{totals.subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-neutral-500">
               <span>Tax Amount</span>
-              <span>₹{totals.tax.toFixed(2)}</span>
+              <span>Rs.{totals.tax.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center text-neutral-500">
-              <span>Discount (₹)</span>
+              <span>Discount (Rs.)</span>
               <input 
                 type="number" 
                 value={discount} 
@@ -306,7 +306,7 @@ export default function POS() {
             </div>
             <div className="flex justify-between text-xl font-black text-neutral-900 pt-2">
               <span>Total Payable</span>
-              <span className="text-emerald-600">₹{finalTotal.toFixed(2)}</span>
+              <span className="text-emerald-600">Rs.{finalTotal.toFixed(2)}</span>
             </div>
           </div>
 
@@ -374,21 +374,21 @@ export default function POS() {
               <div className="space-y-1 text-sm border-t-2 border-neutral-900 pt-4">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>₹{lastSaleTotals.subtotal.toFixed(2)}</span>
+                  <span>Rs.{lastSaleTotals.subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Tax</span>
-                  <span>₹{lastSaleTotals.tax.toFixed(2)}</span>
+                  <span>Rs.{lastSaleTotals.tax.toFixed(2)}</span>
                 </div>
                 {lastSaleTotals.total < (lastSaleTotals.subtotal + lastSaleTotals.tax) && (
                   <div className="flex justify-between text-red-600">
                     <span>Discount</span>
-                    <span>-₹{(lastSaleTotals.subtotal + lastSaleTotals.tax - lastSaleTotals.total).toFixed(2)}</span>
+                    <span>-Rs.{(lastSaleTotals.subtotal + lastSaleTotals.tax - lastSaleTotals.total).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-black text-lg pt-2">
                   <span>Grand Total</span>
-                  <span>₹{lastSaleTotals.total.toFixed(2)}</span>
+                  <span>Rs.{lastSaleTotals.total.toFixed(2)}</span>
                 </div>
               </div>
 

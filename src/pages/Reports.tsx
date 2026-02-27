@@ -59,7 +59,7 @@ export default function Reports() {
                 <p className="text-sm text-neutral-500">Daily sales performance</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-black text-emerald-600">₹{salesData.reduce((acc, curr: any) => acc + curr.total, 0).toFixed(2)}</p>
+                <p className="text-2xl font-black text-emerald-600">Rs.{salesData.reduce((acc, curr: any) => acc + curr.total, 0).toFixed(2)}</p>
                 <p className="text-xs text-neutral-400 uppercase font-bold tracking-widest">Total Period Revenue</p>
               </div>
             </div>
@@ -108,7 +108,7 @@ export default function Reports() {
           <div className="bg-emerald-600 p-6 rounded-2xl text-white shadow-xl shadow-emerald-100">
             <TrendingUp className="w-8 h-8 mb-4 opacity-50" />
             <h4 className="text-emerald-100 text-sm font-bold uppercase tracking-widest mb-1">Average Order Value</h4>
-            <p className="text-3xl font-black">₹{(salesData.reduce((acc, curr: any) => acc + curr.total, 0) / salesData.reduce((acc, curr: any) => acc + curr.count, 0) || 0).toFixed(2)}</p>
+            <p className="text-3xl font-black">Rs.{(salesData.reduce((acc, curr: any) => acc + curr.total, 0) / salesData.reduce((acc, curr: any) => acc + curr.count, 0) || 0).toFixed(2)}</p>
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
@@ -142,7 +142,7 @@ export default function Reports() {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-neutral-900">Target Reached</p>
-                  <p className="text-xs text-neutral-500">Daily sales target of ₹10k achieved</p>
+                  <p className="text-xs text-neutral-500">Daily sales target of Rs.10k achieved</p>
                 </div>
               </div>
               <div className="flex gap-3">

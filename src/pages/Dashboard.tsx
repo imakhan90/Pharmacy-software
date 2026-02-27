@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [expiryData, setExpiryData] = useState([]);
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expiryFilter, setExpiryFilter] = useState(30);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -49,7 +50,7 @@ export default function Dashboard() {
   const stats = [
     { 
       label: "Today's Sales", 
-      value: `₹${salesData[0]?.total || 0}`, 
+      value: `Rs.${salesData[0]?.total || 0}`, 
       change: "+12.5%", 
       trend: "up",
       icon: TrendingUp,
@@ -116,6 +117,84 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Expiry Watchlist */}
+        <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-neutral-900">Expiry Watchlist</h3>
+              <p className="text-xs text-neutral-500">Monitor batches nearing expiration</p>
+            </div>
+            <div className="flex bg-neutral-100 p-1 rounded-lg">
+              {[30, 60, 90].map((days) => (
+                <button
+                  key={days}
+                  onClick={() => setExpiryFilter(days)}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    expiryFilter === days 
+                      ? "bg-white text-emerald-600 shadow-sm" 
+                      : "text-neutral-500 hover:text-neutral-700"
+                  }`}
+                >
+                  {days}D
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex-1 space-y-3 overflow-auto max-h-[400px] pr-2 custom-scrollbar">
+            {expiryData
+              .filter((item: any) => {
+                const expiryDate = new Date(item.expiry_date);
+                const today = new Date();
+                const diffTime = expiryDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= expiryFilter;
+              })
+              .map((item: any, i) => {
+                const expiryDate = new Date(item.expiry_date);
+                const today = new Date();
+                const diffTime = expiryDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let statusColor = "bg-emerald-50 text-emerald-600 border-emerald-100";
+                if (diffDays <= 30) statusColor = "bg-red-50 text-red-600 border-red-100";
+                else if (diffDays <= 60) statusColor = "bg-amber-50 text-amber-600 border-amber-100";
+
+                return (
+                  <div key={i} className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:shadow-sm ${statusColor}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${statusColor.split(' ')[0]} border border-current opacity-20`}>
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm leading-tight">{item.brand_name}</p>
+                        <p className="text-[10px] opacity-70 font-mono uppercase tracking-wider">Batch: {item.batch_number}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black">{item.current_qty} Units</p>
+                      <p className="text-[10px] font-bold uppercase tracking-tighter">
+                        {diffDays <= 0 ? 'Expired' : `Expires in ${diffDays} days`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            {expiryData.filter((item: any) => {
+                const expiryDate = new Date(item.expiry_date);
+                const today = new Date();
+                const diffTime = expiryDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= expiryFilter;
+              }).length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-neutral-400 opacity-50">
+                <AlertTriangle className="w-12 h-12 mb-2" />
+                <p className="text-sm font-medium">No batches expiring in {expiryFilter} days</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Sales Chart */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
           <h3 className="text-lg font-bold text-neutral-900 mb-6">Sales Performance</h3>
@@ -131,31 +210,6 @@ export default function Dashboard() {
                 <Bar dataKey="total" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Inventory Status */}
-        <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
-          <h3 className="text-lg font-bold text-neutral-900 mb-6">Inventory Alerts</h3>
-          <div className="space-y-4">
-            {expiryData.slice(0, 5).map((item: any, i) => (
-              <div key={i} className="flex items-center justify-between p-4 bg-red-50 rounded-xl border border-red-100">
-                <div>
-                  <p className="font-semibold text-red-900">{item.brand_name}</p>
-                  <p className="text-xs text-red-600">Expires: {item.expiry_date}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-red-900">{item.current_qty} units</p>
-                  <p className="text-xs text-red-600">Batch: {item.batch_number}</p>
-                </div>
-              </div>
-            ))}
-            {expiryData.length === 0 && (
-              <div className="text-center py-12 text-neutral-400">
-                <Package className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                <p>No immediate expiry alerts</p>
-              </div>
-            )}
           </div>
         </div>
       </div>

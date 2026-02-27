@@ -267,7 +267,7 @@ export default function Suppliers() {
                           <tr key={p.id} className="bg-white">
                             <td className="px-4 py-3 text-neutral-600">{new Date(p.timestamp).toLocaleDateString()}</td>
                             <td className="px-4 py-3 font-bold text-neutral-900">{p.invoice_number}</td>
-                            <td className="px-4 py-3 text-right font-bold text-emerald-600">₹{p.total_amount.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-bold text-emerald-600">Rs.{p.total_amount.toFixed(2)}</td>
                             <td className="px-4 py-3 text-neutral-500">{p.user_name}</td>
                           </tr>
                         ))}

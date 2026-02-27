@@ -5,7 +5,9 @@ import { format, isAfter, addDays } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Inventory() {
+  const [activeTab, setActiveTab] = useState('stock'); // stock, adjustments
   const [inventory, setInventory] = useState([]);
+  const [allAdjustments, setAllAdjustments] = useState([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all'); // all, near-expiry, low-stock
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -29,12 +31,22 @@ export default function Inventory() {
 
   useEffect(() => {
     fetchInventory();
+    fetchAdjustments();
   }, []);
 
   const fetchInventory = async () => {
     try {
       const data = await apiFetch('/inventory');
       setInventory(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAdjustments = async () => {
+    try {
+      const data = await apiFetch('/inventory/all-adjustments');
+      setAllAdjustments(data);
     } catch (err) {
       console.error(err);
     }
@@ -55,6 +67,7 @@ export default function Inventory() {
       });
       setShowAdjustModal(false);
       fetchInventory();
+      fetchAdjustments();
       setAdjustData({ type: 'damage', quantity: 0, reason: '' });
     } catch (err) {
       alert(err);
@@ -115,6 +128,7 @@ export default function Inventory() {
 
   const filtered = inventory.filter((item: any) => {
     const matchesSearch = item.brand_name.toLowerCase().includes(search.toLowerCase()) || 
+                         item.generic_name.toLowerCase().includes(search.toLowerCase()) ||
                          item.batch_number.toLowerCase().includes(search.toLowerCase());
     
     if (filter === 'near-expiry') {
@@ -126,11 +140,32 @@ export default function Inventory() {
     return matchesSearch;
   });
 
+  const stats = {
+    totalValue: inventory.reduce((acc, item: any) => acc + (item.current_qty * item.purchase_rate), 0),
+    potentialRevenue: inventory.reduce((acc, item: any) => acc + (item.current_qty * item.selling_rate), 0),
+    lowStockCount: inventory.filter((item: any) => item.current_qty < 50).length,
+    nearExpiryCount: inventory.filter((item: any) => !isAfter(new Date(item.expiry_date), addDays(new Date(), 90))).length
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Batch Inventory</h1>
         <div className="flex gap-2">
+          <div className="bg-neutral-100 p-1 rounded-xl flex gap-1 mr-4">
+            <button 
+              onClick={() => setActiveTab('stock')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'stock' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+              Current Stock
+            </button>
+            <button 
+              onClick={() => setActiveTab('adjustments')}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'adjustments' ? 'bg-white text-emerald-600 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+            >
+              Adjustment Log
+            </button>
+          </div>
           <button 
             onClick={exportCSV}
             className="bg-white border border-neutral-200 text-neutral-600 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-neutral-50 transition-colors"
@@ -140,133 +175,228 @@ export default function Inventory() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-neutral-100 bg-neutral-50/50 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
-            <input 
-              type="text"
-              placeholder="Search by medicine or batch..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-            />
+      {activeTab === 'stock' ? (
+        <>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Inventory Value (Cost)</p>
+              <p className="text-xl font-black text-neutral-900">Rs.{stats.totalValue.toLocaleString()}</p>
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-600 font-bold">
+                <ArrowUpDown className="w-3 h-3" /> Based on purchase rate
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm">
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Potential Revenue</p>
+              <p className="text-xl font-black text-emerald-600">Rs.{stats.potentialRevenue.toLocaleString()}</p>
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-neutral-400 font-bold">
+                Profit Margin: Rs.{(stats.potentialRevenue - stats.totalValue).toLocaleString()}
+              </div>
+            </div>
+            <div className={`p-4 rounded-2xl border shadow-sm transition-all ${stats.lowStockCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-neutral-200'}`}>
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Low Stock Batches</p>
+              <p className={`text-xl font-black ${stats.lowStockCount > 0 ? 'text-amber-600' : 'text-neutral-900'}`}>{stats.lowStockCount}</p>
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 font-bold">
+                {stats.lowStockCount > 0 ? 'Action required soon' : 'All stock levels healthy'}
+              </div>
+            </div>
+            <div className={`p-4 rounded-2xl border shadow-sm transition-all ${stats.nearExpiryCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-neutral-200'}`}>
+              <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">Near Expiry (90 Days)</p>
+              <p className={`text-xl font-black ${stats.nearExpiryCount > 0 ? 'text-red-600' : 'text-neutral-900'}`}>{stats.nearExpiryCount}</p>
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-red-600 font-bold">
+                {stats.nearExpiryCount > 0 ? 'Prioritize these sales' : 'No immediate expiries'}
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2">
-            {['all', 'near-expiry', 'low-stock'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
-                  filter === f 
-                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" 
-                    : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
-                }`}
-              >
-                {f.replace('-', ' ')}
-              </button>
-            ))}
+
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-neutral-100 bg-neutral-50/50 flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-5 h-5" />
+                <input 
+                  type="text"
+                  placeholder="Search by medicine or batch..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                {['all', 'near-expiry', 'low-stock'].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold capitalize transition-all ${
+                      filter === f 
+                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" 
+                        : "bg-white text-neutral-500 border border-neutral-200 hover:border-neutral-300"
+                    }`}
+                  >
+                    {f.replace('-', ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wider">
+                    <th className="px-6 py-4 font-semibold">Medicine</th>
+                    <th className="px-6 py-4 font-semibold">Batch Info</th>
+                    <th className="px-6 py-4 font-semibold">Expiry</th>
+                    <th className="px-6 py-4 font-semibold">Stock</th>
+                    <th className="px-6 py-4 font-semibold">Pricing</th>
+                    <th className="px-6 py-4 font-semibold">Status</th>
+                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {filtered.map((item: any) => {
+                    const isNearExpiry = !isAfter(new Date(item.expiry_date), addDays(new Date(), 90));
+                    const isLowStock = item.current_qty < 50;
+
+                    return (
+                      <tr key={item.id} className="hover:bg-neutral-50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-neutral-900">{item.brand_name}</p>
+                          <p className="text-xs text-neutral-500">{item.generic_name} - {item.strength}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-mono text-neutral-700">{item.batch_number}</p>
+                          <p className="text-xs text-neutral-500">Supplier: {item.supplier_name}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={`flex items-center gap-2 text-sm ${isNearExpiry ? 'text-red-600 font-bold' : 'text-neutral-600'}`}>
+                            <Calendar className="w-4 h-4" />
+                            {item.expiry_date}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className={`text-sm font-bold ${isLowStock ? 'text-amber-600' : 'text-neutral-900'}`}>
+                            {item.current_qty} / {item.initial_qty}
+                          </p>
+                          <div className="w-24 h-1.5 bg-neutral-100 rounded-full mt-1 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${(item.current_qty / item.initial_qty) * 100}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-bold text-neutral-900">Rs.{item.selling_rate}</p>
+                          <p className="text-xs text-neutral-500">MRP: Rs.{item.mrp}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          {isNearExpiry && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded">
+                              <AlertCircle className="w-3 h-3" /> Near Expiry
+                            </span>
+                          )}
+                          {!isNearExpiry && isLowStock && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold uppercase rounded">
+                              <AlertCircle className="w-3 h-3" /> Low Stock
+                            </span>
+                          )}
+                          {!isNearExpiry && !isLowStock && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase rounded">
+                              Healthy
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => { setSelectedBatch(item); setEditData({ expiry_date: item.expiry_date, mrp: item.mrp, selling_rate: item.selling_rate }); setShowEditModal(true); }}
+                              className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
+                              title="Edit Batch"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedBatch(item); setShowAdjustModal(true); }}
+                              className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
+                              title="Adjust Stock"
+                            >
+                              <Settings2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => openHistory(item)}
+                              className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
+                              title="Adjustment History"
+                            >
+                              <History className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-semibold">Medicine</th>
-                <th className="px-6 py-4 font-semibold">Batch Info</th>
-                <th className="px-6 py-4 font-semibold">Expiry</th>
-                <th className="px-6 py-4 font-semibold">Stock</th>
-                <th className="px-6 py-4 font-semibold">Pricing</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {filtered.map((item: any) => {
-                const isNearExpiry = !isAfter(new Date(item.expiry_date), addDays(new Date(), 90));
-                const isLowStock = item.current_qty < 50;
-
-                return (
-                  <tr key={item.id} className="hover:bg-neutral-50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-neutral-900">{item.brand_name}</p>
-                      <p className="text-xs text-neutral-500">{item.generic_name} - {item.strength}</p>
+        </>
+      ) : (
+        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-neutral-100 bg-neutral-50/50">
+            <h3 className="font-bold text-neutral-900">Global Adjustment Log</h3>
+            <p className="text-xs text-neutral-500">History of all manual stock corrections across all batches</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wider">
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Medicine / Batch</th>
+                  <th className="px-6 py-4 font-semibold">Type</th>
+                  <th className="px-6 py-4 font-semibold">Quantity</th>
+                  <th className="px-6 py-4 font-semibold">Reason</th>
+                  <th className="px-6 py-4 font-semibold">User</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {allAdjustments.map((adj: any) => (
+                  <tr key={adj.id} className="hover:bg-neutral-50 transition-colors">
+                    <td className="px-6 py-4 text-sm text-neutral-600">
+                      {new Date(adj.timestamp).toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm font-mono text-neutral-700">{item.batch_number}</p>
-                      <p className="text-xs text-neutral-500">Supplier: {item.supplier_name}</p>
+                      <p className="font-bold text-neutral-900">{adj.brand_name}</p>
+                      <p className="text-xs text-neutral-500 font-mono">{adj.batch_number}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <div className={`flex items-center gap-2 text-sm ${isNearExpiry ? 'text-red-600 font-bold' : 'text-neutral-600'}`}>
-                        <Calendar className="w-4 h-4" />
-                        {item.expiry_date}
-                      </div>
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                        adj.type === 'damage' ? 'bg-red-50 text-red-600' : 
+                        adj.type === 'return' ? 'bg-emerald-50 text-emerald-600' : 
+                        'bg-blue-50 text-blue-600'
+                      }`}>
+                        {adj.type}
+                      </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className={`text-sm font-bold ${isLowStock ? 'text-amber-600' : 'text-neutral-900'}`}>
-                        {item.current_qty} / {item.initial_qty}
-                      </p>
-                      <div className="w-24 h-1.5 bg-neutral-100 rounded-full mt-1 overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${isLowStock ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                          style={{ width: `${(item.current_qty / item.initial_qty) * 100}%` }}
-                        />
-                      </div>
+                    <td className={`px-6 py-4 font-bold ${adj.quantity < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {adj.quantity > 0 ? '+' : ''}{adj.quantity}
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-bold text-neutral-900">₹{item.selling_rate}</p>
-                      <p className="text-xs text-neutral-500">MRP: ₹{item.mrp}</p>
+                    <td className="px-6 py-4 text-sm text-neutral-600 max-w-xs truncate" title={adj.reason}>
+                      {adj.reason}
                     </td>
-                    <td className="px-6 py-4">
-                      {isNearExpiry && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded">
-                          <AlertCircle className="w-3 h-3" /> Near Expiry
-                        </span>
-                      )}
-                      {!isNearExpiry && isLowStock && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold uppercase rounded">
-                          <AlertCircle className="w-3 h-3" /> Low Stock
-                        </span>
-                      )}
-                      {!isNearExpiry && !isLowStock && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase rounded">
-                          Healthy
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => { setSelectedBatch(item); setEditData({ expiry_date: item.expiry_date, mrp: item.mrp, selling_rate: item.selling_rate }); setShowEditModal(true); }}
-                          className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
-                          title="Edit Batch"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => { setSelectedBatch(item); setShowAdjustModal(true); }}
-                          className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
-                          title="Adjust Stock"
-                        >
-                          <Settings2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => openHistory(item)}
-                          className="p-2 hover:bg-neutral-200 rounded-lg text-neutral-600"
-                          title="Adjustment History"
-                        >
-                          <History className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <td className="px-6 py-4 text-sm text-neutral-500">
+                      {adj.user_name}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+                {allAdjustments.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-neutral-400 italic">
+                      No adjustments recorded yet
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Adjust Modal */}
       {showAdjustModal && (
@@ -366,7 +496,7 @@ export default function Inventory() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-neutral-500 uppercase">MRP (₹)</label>
+                  <label className="text-xs font-semibold text-neutral-500 uppercase">MRP (Rs.)</label>
                   <input 
                     type="number" 
                     step="0.01"
@@ -377,7 +507,7 @@ export default function Inventory() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-neutral-500 uppercase">Selling Rate (₹)</label>
+                  <label className="text-xs font-semibold text-neutral-500 uppercase">Selling Rate (Rs.)</label>
                   <input 
                     type="number" 
                     step="0.01"

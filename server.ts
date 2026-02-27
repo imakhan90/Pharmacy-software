@@ -50,10 +50,12 @@ db.exec(`
     selling_rate REAL,
     tax_percent REAL,
     supplier_id INTEGER,
+    purchase_id INTEGER,
     initial_qty INTEGER,
     current_qty INTEGER,
     FOREIGN KEY(medicine_id) REFERENCES medicines(id),
-    FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
+    FOREIGN KEY(supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY(purchase_id) REFERENCES purchases(id)
   );
 
   CREATE TABLE IF NOT EXISTS sales (
@@ -91,7 +93,14 @@ db.exec(`
     FOREIGN KEY(supplier_id) REFERENCES suppliers(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+`);
 
+// Ensure purchase_id exists in batches (for existing databases)
+try {
+  db.exec("ALTER TABLE batches ADD COLUMN purchase_id INTEGER REFERENCES purchases(id)");
+} catch (e) {}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS stock_adjustments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     batch_id INTEGER,
@@ -299,6 +308,18 @@ async function startServer() {
     }
   });
 
+  app.get("/api/inventory/all-adjustments", authenticate, (req, res) => {
+    const adjustments = db.prepare(`
+      SELECT sa.*, b.batch_number, m.brand_name, u.full_name as user_name
+      FROM stock_adjustments sa
+      JOIN batches b ON sa.batch_id = b.id
+      JOIN medicines m ON b.medicine_id = m.id
+      JOIN users u ON sa.user_id = u.id
+      ORDER BY sa.timestamp DESC
+    `).all();
+    res.json(adjustments);
+  });
+
   app.get("/api/inventory/:id/adjustments", authenticate, (req, res) => {
     const adjustments = db.prepare(`
       SELECT sa.*, u.full_name as user_name
@@ -380,8 +401,8 @@ async function startServer() {
       for (const item of items) {
         // Add or update batch
         db.prepare(`
-          INSERT INTO batches (medicine_id, batch_number, expiry_date, mfg_date, purchase_rate, mrp, selling_rate, tax_percent, supplier_id, initial_qty, current_qty)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO batches (medicine_id, batch_number, expiry_date, mfg_date, purchase_rate, mrp, selling_rate, tax_percent, supplier_id, purchase_id, initial_qty, current_qty)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           item.medicine_id,
           item.batch_number,
@@ -392,6 +413,7 @@ async function startServer() {
           item.selling_rate,
           item.tax_percent,
           supplier_id,
+          purchaseId,
           item.quantity,
           item.quantity
         );
@@ -429,6 +451,16 @@ async function startServer() {
       ORDER BY p.timestamp DESC
     `).all();
     res.json(purchases);
+  });
+
+  app.get("/api/purchases/:id/items", authenticate, (req, res) => {
+    const items = db.prepare(`
+      SELECT b.*, m.brand_name, m.generic_name, m.strength
+      FROM batches b
+      JOIN medicines m ON b.medicine_id = m.id
+      WHERE b.purchase_id = ?
+    `).all(req.params.id);
+    res.json(items);
   });
 
   // Reports
