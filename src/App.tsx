@@ -12,6 +12,8 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Purchases from './pages/Purchases';
 
+import Landing from './pages/Landing';
+
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = useAuthStore((state) => state.token);
   if (!token) return <Navigate to="/login" replace />;
@@ -22,8 +24,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/medicines" element={<ProtectedRoute><Medicines /></ProtectedRoute>} />
         <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
         <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />

@@ -93,7 +93,26 @@ db.exec(`
     FOREIGN KEY(supplier_id) REFERENCES suppliers(id),
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT, -- 'expiry', 'low_stock'
+    message TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
 `);
+
+// Seed default settings
+const expiryThreshold = db.prepare("SELECT * FROM settings WHERE key = ?").get("expiry_notification_days");
+if (!expiryThreshold) {
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run("expiry_notification_days", "30");
+}
 
 // Ensure purchase_id exists in batches (for existing databases)
 try {
@@ -496,6 +515,58 @@ async function startServer() {
       HAVING total_qty < 50
     `).all();
     res.json(lowStock);
+  });
+
+  // Notifications API
+  app.get("/api/notifications", authenticate, (req, res) => {
+    const notifications = db.prepare("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 50").all();
+    res.json(notifications);
+  });
+
+  app.post("/api/notifications/read-all", authenticate, (req, res) => {
+    db.prepare("UPDATE notifications SET is_read = 1").run();
+    res.json({ success: true });
+  });
+
+  // Settings API
+  app.get("/api/settings", authenticate, (req, res) => {
+    const settings = db.prepare("SELECT * FROM settings").all();
+    const settingsObj = settings.reduce((acc: any, curr: any) => {
+      acc[curr.key] = curr.value;
+      return acc;
+    }, {});
+    res.json(settingsObj);
+  });
+
+  app.post("/api/settings", authenticate, (req: any, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: "Unauthorized" });
+    const { key, value } = req.body;
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, value.toString());
+    res.json({ success: true });
+  });
+
+  // Trigger Notification Check (can be called manually or on dashboard load)
+  app.post("/api/notifications/check", authenticate, (req, res) => {
+    const threshold = parseInt(db.prepare("SELECT value FROM settings WHERE key = ?").get("expiry_notification_days")?.value || "30");
+    
+    const expiringBatches = db.prepare(`
+      SELECT b.*, m.brand_name 
+      FROM batches b 
+      JOIN medicines m ON b.medicine_id = m.id 
+      WHERE b.expiry_date <= date('now', '+' || ? || ' days')
+      AND b.current_qty > 0
+    `).all(threshold);
+
+    for (const batch of expiringBatches as any[]) {
+      const message = `Batch ${batch.batch_number} of ${batch.brand_name} is expiring on ${batch.expiry_date}`;
+      // Check if notification already exists for this batch and message to avoid duplicates
+      const exists = db.prepare("SELECT id FROM notifications WHERE message = ? AND is_read = 0").get(message);
+      if (!exists) {
+        db.prepare("INSERT INTO notifications (type, message) VALUES (?, ?)").run('expiry', message);
+      }
+    }
+
+    res.json({ success: true, count: expiringBatches.length });
   });
 
   // Vite middleware for development

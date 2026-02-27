@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Pill, Lock, User } from 'lucide-react';
+import { Pill, Lock, User, ArrowLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Login() {
@@ -25,7 +25,7 @@ export default function Login() {
       const data = await response.json();
       if (response.ok) {
         login(data.user, data.token);
-        navigate('/');
+        navigate('/dashboard');
       } else {
         setError(data.error);
       }
@@ -37,7 +37,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-100 flex flex-col items-center justify-center p-4">
+      <Link to="/" className="mb-6 flex items-center gap-2 text-neutral-500 hover:text-neutral-900 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to Home
+      </Link>
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

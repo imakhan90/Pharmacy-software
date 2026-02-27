@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
   Package, 
   AlertTriangle, 
   Clock,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Bell,
+  Settings,
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -26,18 +31,34 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expiryFilter, setExpiryFilter] = useState(30);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [notificationThreshold, setNotificationThreshold] = useState(30);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [sales, expiry, stock] = await Promise.all([
+        const [sales, expiry, stock, notifs, settings] = await Promise.all([
           apiFetch('/reports/sales'),
           apiFetch('/reports/expiry'),
-          apiFetch('/reports/low-stock')
+          apiFetch('/reports/low-stock'),
+          apiFetch('/notifications'),
+          apiFetch('/settings')
         ]);
         setSalesData(sales);
         setExpiryData(expiry);
         setLowStock(stock);
+        setNotifications(notifs);
+        if (settings.expiry_notification_days) {
+          setNotificationThreshold(parseInt(settings.expiry_notification_days));
+        }
+        
+        // Trigger a fresh check for notifications
+        await apiFetch('/notifications/check', { method: 'POST' });
+        const updatedNotifs = await apiFetch('/notifications');
+        setNotifications(updatedNotifs);
       } catch (err) {
         console.error(err);
       } finally {
@@ -46,6 +67,35 @@ export default function Dashboard() {
     };
     fetchData();
   }, []);
+
+  const markAllAsRead = async () => {
+    try {
+      await apiFetch('/notifications/read-all', { method: 'POST' });
+      const updatedNotifs = await apiFetch('/notifications');
+      setNotifications(updatedNotifs);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const saveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      await apiFetch('/settings', {
+        method: 'POST',
+        body: JSON.stringify({ key: 'expiry_notification_days', value: notificationThreshold })
+      });
+      setShowSettings(false);
+      // Re-trigger check with new threshold
+      await apiFetch('/notifications/check', { method: 'POST' });
+      const updatedNotifs = await apiFetch('/notifications');
+      setNotifications(updatedNotifs);
+    } catch (err) {
+      alert(err);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
 
   const stats = [
     { 
@@ -92,7 +142,61 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-neutral-900">Dashboard Overview</h1>
-        <div className="text-sm text-neutral-500">Last updated: {new Date().toLocaleTimeString()}</div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="p-2 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors relative"
+            >
+              <Bell className="w-5 h-5 text-neutral-600" />
+              {notifications.filter((n: any) => !n.is_read).length > 0 && (
+                <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full"></span>
+              )}
+            </button>
+            
+            <AnimatePresence>
+              {showNotifications && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 mt-2 w-80 bg-white border border-neutral-200 rounded-2xl shadow-2xl z-[100] overflow-hidden"
+                >
+                  <div className="p-4 border-b border-neutral-100 bg-neutral-50 flex items-center justify-between">
+                    <h3 className="font-bold text-neutral-900 text-sm">Notifications</h3>
+                    <button 
+                      onClick={markAllAsRead}
+                      className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:text-emerald-700"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-neutral-400 text-sm">No notifications</div>
+                    ) : (
+                      notifications.map((n: any) => (
+                        <div key={n.id} className={`p-4 border-b border-neutral-50 last:border-none ${!n.is_read ? 'bg-emerald-50/30' : ''}`}>
+                          <p className="text-xs text-neutral-900 leading-relaxed">{n.message}</p>
+                          <p className="text-[10px] text-neutral-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="p-2 bg-white border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-colors"
+            title="Alert Settings"
+          >
+            <Settings className="w-5 h-5 text-neutral-600" />
+          </button>
+          <div className="text-sm text-neutral-500">Last updated: {new Date().toLocaleTimeString()}</div>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -213,6 +317,69 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[110] p-4 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 border-b border-neutral-100 flex items-center justify-between bg-neutral-50">
+                <h2 className="text-xl font-bold text-neutral-900">Alert Configuration</h2>
+                <button onClick={() => setShowSettings(false)} className="text-neutral-400 hover:text-neutral-600">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Expiry Notification Threshold</label>
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="range" 
+                      min="7" 
+                      max="180" 
+                      step="1"
+                      value={notificationThreshold}
+                      onChange={(e) => setNotificationThreshold(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-neutral-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                    />
+                    <span className="w-16 text-center font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                      {notificationThreshold}D
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-neutral-400">System will generate alerts for batches expiring within {notificationThreshold} days.</p>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3">
+                  <Clock className="w-5 h-5 text-blue-600 shrink-0" />
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    Notifications are generated automatically. In a production environment, this would also trigger email alerts to the registered administrator.
+                  </p>
+                </div>
+              </div>
+              <div className="p-6 bg-neutral-50 border-t border-neutral-100 flex gap-3">
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  className="flex-1 py-2 font-bold text-neutral-600 hover:bg-neutral-200 rounded-xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={saveSettings}
+                  disabled={isSavingSettings}
+                  className="flex-1 py-2 font-bold bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isSavingSettings ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -24,7 +24,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Pill, label: 'Medicines', path: '/medicines' },
   { icon: Users, label: 'Suppliers', path: '/suppliers' },
   { icon: Package, label: 'Inventory', path: '/inventory' },
